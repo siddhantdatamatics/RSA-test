@@ -77,7 +77,13 @@ app.post('/decrypt', (req, res) => {
         }
 
         // Step 5: Return the decrypted data
-        res.json({ decryptedData: decipher.output.toString() });
+        let decryptedData = decipher.output.toString();
+        try {
+            decryptedData = JSON.parse(decryptedData);
+        } catch (e) {
+            // If parsing fails, keep it as plain text
+        }
+        res.json({ decryptedData });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
