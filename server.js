@@ -19,7 +19,8 @@ app.post('/encrypt', (req, res) => {
         // Step 2: Encrypt the data using AES-GCM
         const cipher = forge.cipher.createCipher('AES-GCM', aesKey);
         cipher.start({ iv });
-        cipher.update(forge.util.createBuffer(data));
+        const input = typeof data === 'object' ? JSON.stringify(data) : data; // Convert object to string if needed
+        cipher.update(forge.util.createBuffer(input));
         cipher.finish();
         const encryptedData = forge.util.encode64(cipher.output.getBytes()); // Base64 encode the encrypted data
         const authTag = forge.util.encode64(cipher.mode.tag.getBytes()); // Base64 encode the authentication tag
