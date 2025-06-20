@@ -47,6 +47,54 @@ app.post('/encrypt', (req, res) => {
     }
 });
 
+// Encrypt multiple data in one round using RSA and AES
+app.post('/encrypt-multiple', (req, res) => {
+    try {
+        const { dataArray, appPublicKey } = req.body;
+
+        if (!Array.isArray(dataArray)) {
+            return res.status(400).json({ error: 'dataArray must be an array of strings or objects.' });
+        }
+
+        // Step 1: Generate AES key and IV
+        const aesKey = forge.random.getBytesSync(32); // 256-bit AES key
+        const iv = forge.random.getBytesSync(16); // 128-bit IV
+
+        // Step 2: Encrypt each item in the array using AES-GCM
+        const encryptedItems = dataArray.map((data) => {
+            const cipher = forge.cipher.createCipher('AES-GCM', aesKey);
+            cipher.start({ iv });
+            const input = typeof data === 'object' ? JSON.stringify(data) : data; // Convert object to string if needed
+            cipher.update(forge.util.createBuffer(input));
+            cipher.finish();
+            return {
+                encryptedData: forge.util.encode64(cipher.output.getBytes()), // Base64 encode the encrypted data
+                authTag: forge.util.encode64(cipher.mode.tag.getBytes()), // Base64 encode the authentication tag
+            };
+        });
+
+        // Step 3: Combine AES key, IV, and auth tag with a separator
+        const aesKeyAndIvAndAuthTag = `${forge.util.encode64(aesKey)}:${forge.util.encode64(iv)}:${encryptedItems[0].authTag}`;
+
+        // Step 4: Convert PEM to Forge public key object
+        const clientPublicKey = forge.pki.publicKeyFromPem(appPublicKey);
+
+        // Step 5: Encrypt the combined AES key, IV, and auth tag using RSA-OAEP
+        const encryptedKeyAndIvBytes = clientPublicKey.encrypt(aesKeyAndIvAndAuthTag, 'RSA-OAEP', {
+            md: forge.md.sha256.create(), // Use SHA-256 for OAEP
+        });
+        const xEncryptedKey = forge.util.encode64(encryptedKeyAndIvBytes); // Base64 encode the encrypted AES key, IV, and auth tag
+
+        // Step 6: Return the encrypted response
+        res.json({
+            xEncryptedKey,
+            encryptedItems: encryptedItems.map((item) => item.encryptedData), // Return only encrypted data
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Decrypt data using RSA and AES
 app.post('/decrypt', (req, res) => {
     try {
